@@ -6,12 +6,11 @@ This repository contains the complete implementation used in our **NeurIPS 2025*
 
 ## 📌 Project Purpose
 
-Analog in-memory computing enables energy-efficient deep learning, but suffers from limited precision due to quantization noise, device asymmetry, and low conductance states (e.g., 4–10 states). To overcome this, we propose a **multi-timescale residual learning (MRL)** framework combined with a **warm-start initialization**, which updates the most significant tiles first to accelerate convergence and improve final accuracy.
+Analog in-memory computing offers energy-efficient deep learning, but its performance is often constrained by limited precision caused by asymmetric updates and low conductance resolution (e.g., fewer than 10 discrete states). To address this, we propose a multi-timescale residual learning (MRL) framework, augmented with a warm-start strategy that prioritizes updates to the most significant tiles early in training. This approach accelerates convergence and improves final model accuracy under constrained device precision
 
 Specifically:
 
-* We **customize the low-level AIHWKit core** (notably `rpu_transfer_device.cpp`) to support **warm-start tile updates**, triggered during training when loss plateau is detected.
-* We adopt a **geometrically decaying update schedule** for tiles during residual learning, with **per-tile learning rates** that emphasize higher-precision accumulation.
+* We **customize the AIHWKit library** (mainly `rpu_transfer_device.cpp`) to support **warm-start tile updates**, triggered during training when loss plateau is detected.
 * We demonstrate consistent improvements over baselines (TT-v1, TT-v2) on both **full analog LeNet-5 (MNIST)** and **partially analog ResNets (CIFAR-10)** under limited-state (4–10 state) ReRAM devices.
 
 ---
