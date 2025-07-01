@@ -1,14 +1,18 @@
-# In-memory-Training-on-Analog-Devices
-Code for Nips 2025
 # In-memory Training on Analog Devices
 
-This repository contains code and modified components of [AIHWKit](https://github.com/IBM/aihwkit), used in our experiments for a NeurIPS 2025 submission. The focus of this project is analog in-memory training with warm-start support, implemented via low-level customization of AIHWKit internals.
+This repository contains the complete implementation used in our **NeurIPS 2025** submission on analog in-memory training with warm-start initialization. Our work is based on and **modifies the IBM [AIHWKit](https://github.com/IBM/aihwkit)** simulator to support **multi-tile updates under limited conductance states**, enabling high-precision training on low-precision analog devices.
 
 ---
 
 ## 📌 Project Purpose
 
-We apply analog training techniques to neural networks by modifying the `rpu_transfer_device.cpp` component in AIHWKit to support warm-start mechanisms that update multiple tiles across training epochs. All experiments are conducted on customized analog-aware models in PyTorch.
+Analog in-memory computing enables energy-efficient deep learning, but suffers from limited precision due to quantization noise, device asymmetry, and low conductance states (e.g., 4–10 states). To overcome this, we propose a **multi-timescale residual learning (MRL)** framework combined with a **warm-start initialization**, which updates the most significant tiles first to accelerate convergence and improve final accuracy.
+
+Specifically:
+
+* We **customize the low-level AIHWKit core** (notably `rpu_transfer_device.cpp`) to support **warm-start tile updates**, triggered during training when loss plateau is detected.
+* We adopt a **geometrically decaying update schedule** for tiles during residual learning, with **per-tile learning rates** that emphasize higher-precision accumulation.
+* We demonstrate consistent improvements over baselines (TT-v1, TT-v2) on both **full analog LeNet-5 (MNIST)** and **partially analog ResNets (CIFAR-10)** under limited-state (4–10 state) ReRAM devices.
 
 ---
 
