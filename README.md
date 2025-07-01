@@ -31,16 +31,6 @@ We implemented a custom warm-start flag mechanism and integrated it into the `Tr
 > ❌ No external pip installation is required.
 
 ---
-
-## 📁 Project Structure
-.
-├── aihwkit/ # Modified AIHWKit (including C++ backend)
-├── Mnist_LeNet5.py # MNIST training script with LeNet-5
-├── CIFAR-Resnet.py # CIFAR-10 training script with ResNet
-└── README.md # Project description
-
----
-
 ## 🚀 Usage
 
 1. **Create environment:**
@@ -55,36 +45,47 @@ We implemented a custom warm-start flag mechanism and integrated it into the `Tr
     source ./load_env.sh
     make build_inplace_cuda
     cd ..
+
+
 2. **Run Training:**
+
 You can run training experiments with different analog configurations using the following commands:
 
-🟢 LeNet-5 on MNIST (fully analog)
+### 🟢 LeNet-5 on MNIST (fully analog)
 
-   ```bash
-   python Mnist_LeNet5.py --SETTING="ResL" --CUDA=0
+```bash
+python Mnist_LeNet5.py --SETTING="ResL" --CUDA=0
+```
 
-🟡 ResNet-18 on CIFAR-10 (partially analog)
+### 🟡 ResNet-18 on CIFAR-10 (partially analog)
 
-   ```bash
-   python CIFAR-Resnet.py --optimizer="ResL" \
-   -block-number 2 2 2 2 \
-   -block-type D D D A A A \
-   --CUDA=0 --io-perfect
+```bash
+python CIFAR-Resnet.py --optimizer="ResL" \
+  -block-number 2 2 2 2 \
+  -block-type D D D A A A \
+  --CUDA=0 --io-perfect
+```
 
+### 🔵 ResNet-34 on CIFAR-10 (partially analog)
 
-🔵 ResNet-34 on CIFAR-10 (partially analog)
+```bash
+python CIFAR-Resnet.py --optimizer="ResL" \
+  -block-number 3 4 6 3 \
+  -block-type D D D A A A \
+  --CUDA=0 --io-perfect
+```
 
-   ```bash
-   python CIFAR-Resnet.py --optimizer="ResL" \
-   -block-number 3 4 6 3 \
-   -block-type D D D A A A \
-   --CUDA=0 --io-perfect
+---
 
+## 📁 Project Structure
 
-🧠 Flags Explanation
-Flag	Meaning
---optimizer="ResL"	Use ResL configuration (your custom analog config)
---block-number	Define ResNet block depth per stage
---block-type	Choose which stages use Digital (D) or Analog (A)
---io-perfect	Enables perfect I/O simulation (optional)
---CUDA=0	Select GPU device (e.g., --CUDA=0 or --CUDA=1)
+```
+.
+├── aihwkit/               # Modified AIHWKit (with C++ backend and bindings)
+├── Mnist_LeNet5.py        # MNIST training script
+├── CIFAR-Resnet.py        # CIFAR training script
+├── load_env.sh            # Environment setup helper
+└── README.md              # Project documentation
+```
+
+---
