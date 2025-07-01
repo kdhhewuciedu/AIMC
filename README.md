@@ -46,51 +46,40 @@ We implemented a custom warm-start flag mechanism and integrated it into the `Tr
 1. **Create environment:**
 
    ```bash
-   conda create -n aihwkit-cuda-dev python=3.9
+   conda create -n aihwkit-cuda-dev python=3.10 -y
    conda activate aihwkit-cuda-dev
-# Step 1: Create environment
-conda create -n aihwkit-cuda-dev python=3.10 -y
-conda activate aihwkit-cuda-dev
-
-# Step 2: Install Python dependencies
-pip install torch numpy
-conda install mkl mkl-include -y
-conda install tensorboard matplotlib -y
-
-# Step 3: Build modified AIHWKit in-place (from included source)
-cd aihwkit
-source ./load_env.sh
-make build_inplace_cuda
-cd ..
+   pip install torch numpy
+    conda install mkl mkl-include -y
+    conda install tensorboard matplotlib -y
+    cd aihwkit
+    source ./load_env.sh
+    make build_inplace_cuda
+    cd ..
 2. **Run Training:**
 You can run training experiments with different analog configurations using the following commands:
 
 🟢 LeNet-5 on MNIST (fully analog)
-bash
-python Mnist_LeNet5.py --SETTING="ResL" --CUDA=0
-All layers mapped to analog devices (TransferRPUDevice)
 
-Suitable for low-resolution, low-latency testing
+   ```bash
+   python Mnist_LeNet5.py --SETTING="ResL" --CUDA=0
 
 🟡 ResNet-18 on CIFAR-10 (partially analog)
-bash
-python CIFAR-Resnet.py --optimizer="ResL" \
-  -block-number 2 2 2 2 \
-  -block-type D D D A A A \
-  --CUDA=0 --io-perfect
-Converts layer3, layer4, and fc to analog
 
-Useful for studying analog–digital hybrid model behavior
+   ```bash
+   python CIFAR-Resnet.py --optimizer="ResL" \
+   -block-number 2 2 2 2 \
+   -block-type D D D A A A \
+   --CUDA=0 --io-perfect
+
 
 🔵 ResNet-34 on CIFAR-10 (partially analog)
-bash
-python CIFAR-Resnet.py --optimizer="ResL" \
-  -block-number 3 4 6 3 \
-  -block-type D D D A A A \
-  --CUDA=0 --io-perfect
-Larger ResNet with more analog blocks in deep layers
 
-Full support for analog simulation with IO-perfect mode
+   ```bash
+   python CIFAR-Resnet.py --optimizer="ResL" \
+   -block-number 3 4 6 3 \
+   -block-type D D D A A A \
+   --CUDA=0 --io-perfect
+
 
 🧠 Flags Explanation
 Flag	Meaning
