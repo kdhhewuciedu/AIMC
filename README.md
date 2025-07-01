@@ -1,2 +1,101 @@
 # In-memory-Training-on-Analog-Devices
 Code for Nips 2025
+# In-memory Training on Analog Devices
+
+This repository contains code and modified components of [AIHWKit](https://github.com/IBM/aihwkit), used in our experiments for a NeurIPS 2025 submission. The focus of this project is analog in-memory training with warm-start support, implemented via low-level customization of AIHWKit internals.
+
+---
+
+## 📌 Project Purpose
+
+We apply analog training techniques to neural networks by modifying the `rpu_transfer_device.cpp` component in AIHWKit to support warm-start mechanisms that update multiple tiles across training epochs. All experiments are conducted on customized analog-aware models in PyTorch.
+
+---
+
+## 🔧 Modifications to AIHWKit
+
+We implemented a custom warm-start flag mechanism and integrated it into the `TransferRPUDevice` logic. Key changes include:
+
+- **`rpu_transfer_device.cpp`**:  
+  - Core logic for warm-start tile transfer.
+- **`rpu.h`**:  
+  - Added `set_flags()` to expose custom device control from Python.
+- **`rpu_simple_device.h`**:  
+  - Declared `virtual set_flags_cpp()`.
+- **`rpu_based_tiles.cpp`**:  
+  - Bound `set_flags()` to Python via `this->set_flags_cpp()`.
+- **`rpu_transfer_device.h`**:  
+  - Overrode `set_flags_cpp()` and defined a warm-start control flag used in `finalCycleUpdate()`.
+
+> ✅ The modified `aihwkit/` directory is included directly in this repo.  
+> ❌ No external pip installation is required.
+
+---
+
+## 📁 Project Structure
+.
+├── aihwkit/ # Modified AIHWKit (including C++ backend)
+├── Mnist_LeNet5.py # MNIST training script with LeNet-5
+├── CIFAR-Resnet.py # CIFAR-10 training script with ResNet
+└── README.md # Project description
+
+---
+
+## 🚀 Usage
+
+1. **Create environment:**
+
+   ```bash
+   conda create -n aihwkit-cuda-dev python=3.9
+   conda activate aihwkit-cuda-dev
+# Step 1: Create environment
+conda create -n aihwkit-cuda-dev python=3.10 -y
+conda activate aihwkit-cuda-dev
+
+# Step 2: Install Python dependencies
+pip install torch numpy
+conda install mkl mkl-include -y
+conda install tensorboard matplotlib -y
+
+# Step 3: Build modified AIHWKit in-place (from included source)
+cd aihwkit
+source ./load_env.sh
+make build_inplace_cuda
+cd ..
+2. **Run Training:**
+You can run training experiments with different analog configurations using the following commands:
+
+🟢 LeNet-5 on MNIST (fully analog)
+bash
+python Mnist_LeNet5.py --SETTING="ResL" --CUDA=0
+All layers mapped to analog devices (TransferRPUDevice)
+
+Suitable for low-resolution, low-latency testing
+
+🟡 ResNet-18 on CIFAR-10 (partially analog)
+bash
+python CIFAR-Resnet.py --optimizer="ResL" \
+  -block-number 2 2 2 2 \
+  -block-type D D D A A A \
+  --CUDA=0 --io-perfect
+Converts layer3, layer4, and fc to analog
+
+Useful for studying analog–digital hybrid model behavior
+
+🔵 ResNet-34 on CIFAR-10 (partially analog)
+bash
+python CIFAR-Resnet.py --optimizer="ResL" \
+  -block-number 3 4 6 3 \
+  -block-type D D D A A A \
+  --CUDA=0 --io-perfect
+Larger ResNet with more analog blocks in deep layers
+
+Full support for analog simulation with IO-perfect mode
+
+🧠 Flags Explanation
+Flag	Meaning
+--optimizer="ResL"	Use ResL configuration (your custom analog config)
+--block-number	Define ResNet block depth per stage
+--block-type	Choose which stages use Digital (D) or Analog (A)
+--io-perfect	Enables perfect I/O simulation (optional)
+--CUDA=0	Select GPU device (e.g., --CUDA=0 or --CUDA=1)
