@@ -36,9 +36,9 @@ We implemented a custom warm-start flag mechanism and integrated it into the `Tr
 1. **Create environment:**
 
    ```bash
-   conda create -n aihwkit-cuda-dev python=3.10 -y
-   conda activate aihwkit-cuda-dev
-   pip install torch numpy
+    conda create -n aihwkit-cuda-dev python=3.10 -y
+    conda activate aihwkit-cuda-dev
+    pip install torch numpy
     conda install mkl mkl-include -y
     conda install tensorboard matplotlib -y
     cd aihwkit

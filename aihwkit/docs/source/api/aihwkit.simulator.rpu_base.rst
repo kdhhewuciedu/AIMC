@@ -13,4 +13,3 @@ Submodules
    :maxdepth: 4
 
    aihwkit.simulator.rpu_base.tiles
-   aihwkit.simulator.rpu_base.devices

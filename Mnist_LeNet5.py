@@ -37,9 +37,9 @@ from torch.optim.lr_scheduler import LambdaLR
 from utils.logger import Logger
 from collections import deque
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-AIHWKIT_SRC = os.path.join(CURRENT_DIR, 'aihwkit')
+AIHWKIT_SRC = os.path.join(CURRENT_DIR, 'aihwkit', 'src')
 sys.path.insert(0, AIHWKIT_SRC)
-# For warm start
+# # For warm start
 import aihwkit
 print('aihwkit path: ', aihwkit.__file__)
 from aihwkit.nn import AnalogLinear, AnalogSequential, AnalogConv2d

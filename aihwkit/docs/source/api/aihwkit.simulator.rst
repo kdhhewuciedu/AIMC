@@ -6,14 +6,22 @@ aihwkit.simulator package
    :undoc-members:
    :show-inheritance:
 
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   aihwkit.simulator.configs
+   aihwkit.simulator.parameters
+   aihwkit.simulator.presets
+   aihwkit.simulator.tiles
+
 Submodules
 ----------
 
 .. toctree::
    :maxdepth: 4
 
-   aihwkit.simulator.devices
-   aihwkit.simulator.parameters
+   aihwkit.simulator.noise_models
    aihwkit.simulator.rpu_base
-   aihwkit.simulator.tiles
-   aihwkit.simulator.tiles_indexed

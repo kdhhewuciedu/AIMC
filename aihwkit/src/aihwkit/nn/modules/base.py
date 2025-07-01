@@ -1,231 +1,393 @@
 # -*- coding: utf-8 -*-
 
-# (C) Copyright 2020 IBM. All Rights Reserved.
+# (C) Copyright 2020, 2021, 2022, 2023, 2024 IBM. All Rights Reserved.
 #
-# This code is licensed under the Apache License, Version 2.0. You may
-# obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
-#
-# Any modifications or derivative works of this code must retain this
-# copyright notice, and modified files need to carry a notice indicating
-# that they have been altered from the originals.
+# Licensed under the MIT license. See LICENSE file in the project root for details.
 
-"""Base class for analog Modules."""
-
-from typing import Any, Dict, NamedTuple, Optional, Tuple, Union
+"""Base class for adding functionality to analog layers."""
+from typing import Any, List, Optional, Tuple, NamedTuple, Union, Generator, Callable, TYPE_CHECKING
+from collections import OrderedDict
 
 from torch import Tensor
+from torch.nn import Parameter
 from torch import device as torch_device
-from torch.nn import Module
 
-from aihwkit.simulator.devices import (
-    BaseResistiveDevice,
-    ConstantStepResistiveDevice,
-    FloatingPointResistiveDevice
-)
-from aihwkit.simulator.tiles import AnalogTile, BaseTile, FloatingPointTile
+from aihwkit.exceptions import ModuleError
+from aihwkit.simulator.tiles.module import TileModule
+from aihwkit.simulator.tiles.inference import InferenceTileWithPeriphery
+from aihwkit.simulator.tiles.base import AnalogTileStateNames
+from aihwkit.simulator.parameters.base import RPUConfigBase
+
+if TYPE_CHECKING:
+    from aihwkit.inference.noise.base import BaseNoiseModel
 
 
-class AnalogModuleBase(Module):
-    """Base class for analog Modules.
+class AnalogLayerBase:
+    """Mixin that adds functionality on the layer level.
 
-    Base ``Module`` for analog layers that use analog tiles. When subclassing,
-    please note:
-
-    * the ``_setup_tile()`` method is expected to be called by the subclass
-      constructor, and it does not only create a tile, but also sets some
-      instance attributes that are needed by the analog features (optimizer
-      and others).
-    * the ``weight`` and ``bias`` Parameters are not guaranteed to be in
-      sync with the tile weights and biases during the lifetime of the instance,
-      for performance reasons. The canonical way of reading and writing
-      weights is via the ``set_weights()`` and ``get_weights()`` as opposed
-      to using the attributes directly.
+    In general, the defined methods will be looped for all analog tile
+    modules and delegate the function.
     """
-    # pylint: disable=abstract-method
 
-    TILE_CLASS_FLOATING_POINT = FloatingPointTile
-    TILE_CLASS_ANALOG = AnalogTile
+    IS_CONTAINER: bool = False
+    """Class constant indicating whether sub-layers exist or whether
+    this layer is a leave node (that is only having tile modules)"""
 
-    def _setup_tile(
-            self,
-            in_features: int,
-            out_features: int,
-            bias: bool,
-            resistive_device: Optional[BaseResistiveDevice] = None,
-            realistic_read_write: bool = False
-    ) -> BaseTile:
-        """Create an analog tile and setup this layer for using it.
+    # pylint: disable=no-member
 
-        Create an analog tile to be used for the basis of this layer operations,
-        and setup additional attributes of this instance that are needed for
-        using the analog tile.
+    def apply_to_analog_layers(self, fn: Callable) -> "AnalogLayerBase":
+        """Apply a function to all the analog layers.
 
         Note:
-            This method also sets the following attributes, which are assumed
-            to be set by the rest of the methods:
-            * ``self.use_bias``
-            * ``self.realistic_read_write``
-            * ``self.in_features``
-            * ``self.out_features``
+            Here analog layers are all sub modules of the current
+            module that derive from ``AnalogLayerBase`` (such as
+            ``AnalogLinear``) _except_ ``AnalogSequential``.
 
         Args:
-            in_features: input vector size (number of columns).
-            out_features: output vector size (number of rows).
-            resistive_device: analog devices that define the properties of the
-                analog tile.
-            bias: whether to use a bias row on the analog tile or not.
-            realistic_read_write: whether to enable realistic read/write
-               for setting initial weights and read out of weights.
+            fn: function to be applied.
+
+        Returns:
+            This module after the function has been applied.
+
+        """
+        for _, module in self.named_analog_layers():
+            fn(module)
+
+        return self
+
+    def apply_to_analog_tiles(self, fn: Callable) -> "AnalogLayerBase":
+        """Apply a function to all the analog tiles of all layers in this module.
+
+        Example::
+
+            model.apply_to_analog_tiles(lambda tile: tile.reset())
+
+        This would reset each analog tile in the whole DNN looping
+        through all layers and all tiles that might exist in a
+        particular layer.
+
+        Args:
+            fn: function to be applied.
+
+        Returns:
+            This module after the function has been applied.
+
+        """
+        for _, analog_tile in self.named_analog_tiles():
+            fn(analog_tile)
+        return self
+
+    def analog_layers(self) -> Generator["AnalogLayerBase", None, None]:
+        """Generator over analog layers only.
+
+        Note:
+            Here analog layers are all sub modules of the current module that
+            derive from ``AnalogLayerBase`` (such as ``AnalogLinear``)
+            _except_ ``AnalogSequential``.
+        """
+        for _, layer in self.named_analog_layers():  # type: ignore
+            yield layer
+
+    def named_analog_layers(self) -> Generator[Tuple[str, "AnalogLayerBase"], None, None]:
+        """Generator over analog layers only.
+
+        Note:
+            Here analog layers are all sub-modules of the current
+            module that derive from ``AnalogLayerBase`` (such as
+            ``AnalogLinear``) _except_ those that are containers
+            (`IS_CONTAINER=True`) such as ``AnalogSequential``.
+
+        """
+        for name, layer in self.named_modules():  # type: ignore
+            if isinstance(layer, AnalogLayerBase) and not layer.IS_CONTAINER:
+                yield name, layer
+
+    def analog_modules(self) -> Generator["AnalogLayerBase", None, None]:
+        """Generator over analog layers and containers.
+
+        Note:
+            Similar to :meth:`analog_layers` but also returning all
+            analog containers
+        """
+        for layer in self.modules():  # type: ignore
+            if isinstance(layer, AnalogLayerBase):
+                yield layer
+
+    def named_analog_modules(self) -> Generator[Tuple[str, "AnalogLayerBase"], None, None]:
+        """Generator over analog layers.
+
+        Note:
+            Similar to :meth:`named_analog_layers` but also returning all
+            analog containers
+        """
+        for name, layer in self.named_modules():  # type: ignore
+            if isinstance(layer, AnalogLayerBase):
+                yield name, layer
+
+    def analog_tile_count(self) -> int:
+        """Returns the number of tiles.
+
+        Caution:
+
+             This is a static number only counted when first called.
+
+        Returns:
+             Number of AnalogTileModules in this layer.
         """
         # pylint: disable=attribute-defined-outside-init
-        # Default to constant step device if not provided.
-        if not resistive_device:
-            resistive_device = ConstantStepResistiveDevice()
+        if not hasattr(self, "_analog_tile_counter"):
+            self._analog_tile_counter = len(list(self.analog_tiles()))
+        return self._analog_tile_counter
 
-        # Setup the analog-related attributes of this instance.
-        self.use_bias = bias
-        self.realistic_read_write = realistic_read_write
-        self.in_features = in_features
-        self.out_features = out_features
+    def analog_tiles(self) -> Generator["TileModule", None, None]:
+        """Generator to loop over all registered analog tiles of the module"""
+        for _, tile in self.named_analog_tiles():
+            yield tile
 
-        # Create the tile.
-        if isinstance(resistive_device, FloatingPointResistiveDevice):
-            tile_class = self.TILE_CLASS_FLOATING_POINT
-        else:
-            tile_class = self.TILE_CLASS_ANALOG  # type: ignore
+    def named_analog_tiles(self) -> Generator[Tuple[str, "TileModule"], None, None]:
+        """Generator to loop over all registered analog tiles of the module with names."""
+        for name, module in self.named_modules():  # type: ignore
+            if isinstance(module, TileModule):
+                yield (name, module)
 
-        return tile_class(
-            out_features, in_features, resistive_device, bias=bias  # type: ignore
-        )
+    def unregister_parameter(self, param_name: str) -> None:
+        """Unregister module parameter from parameters.
 
-    def set_weights(
-            self,
-            weight: Tensor,
-            bias: Optional[Tensor] = None,
-            force_exact: bool = False
-    ) -> None:
-        """Sets the weight (and bias) with given Tensors.
-
-        This uses an realistic write if the property ``realistic_read_write``
-        of the layer is set, unless it is overwritten by ``force_exact``.
-
-        Note:
-            This is the recommended way for setting the weight/bias matrix of
-            the analog tile, as it will correctly store the weights into the
-            internal memory. Directly writing to ``self.weight`` and
-            ``self.bias`` might yield wrong results as they are not always in
-            sync with the analog tile Parameters, for performance reasons.
-
-        Args:
-            weight: weight matrix
-            bias: bias vector
-            force_exact: forces an exact write to the analog tiles
+        Raises:
+            ModuleError: In case parameter is not found.
         """
-        shape = [self.out_features, self.in_features]
-        weight = weight.clone().reshape(shape)
+        param = getattr(self, param_name, None)
+        if not isinstance(param, Parameter):
+            raise ModuleError(f"Cannot find parameter {param_name} to unregister")
+        delattr(self, param_name)
+        setattr(self, param_name, None)
 
-        realistic = self.realistic_read_write and not force_exact
-        self.analog_tile.set_weights(weight, bias, realistic=realistic)
+    def get_analog_tile_devices(self) -> List[Optional[Union[torch_device, str, int]]]:
+        """Return a list of the devices used by the analog tiles.
 
-        self._sync_weights_from_tile()
+        Returns:
+            List of torch devices.
+        """
+        return [d.device for d in self.analog_tiles()]
 
-    def get_weights(
-            self,
-            force_exact: bool = False
-    ) -> Tuple[Tensor, Optional[Tensor]]:
-        """Get the weight (and bias) tensors.
-
-        This uses an realistic read if the property ``realistic_read_write`` of
-        the layer is set, unless it is overwritten by ``force_exact``.
-
-        Note:
-            This is the recommended way for setting the weight/bias matrix from
-            the analog tile, as it will correctly fetch the weights from the
-            internal memory. Accessing ``self.weight`` and ``self.bias`` might
-            yield wrong results as they are not always in sync with the
-            analog tile library, for performance reasons.
+    def set_weights(self, weight: Tensor, bias: Optional[Tensor] = None, **kwargs: Any) -> None:
+        """Set the weight (and bias) tensors to the analog crossbar.
 
         Args:
-            force_exact: forces an exact read to the analog tiles
+            weight: the weight tensor
+            bias: the bias tensor is available
+            **kwargs: see tile level,
+                e.g. :meth:`~aihwkit.simulator.tiles.analog.AnalogTile.set_weights`
+
+        Raises:
+            ModuleError: if not of type TileModule.
+        """
+        if hasattr(self, "analog_module"):
+            return self.analog_module.set_weights(weight, bias, **kwargs)
+        raise ModuleError(f"set_weights not implemented for {type(self).__name__} ")
+
+    def get_weights(self, **kwargs: Any) -> Tuple[Tensor, Optional[Tensor]]:
+        """Get the weight (and bias) tensors from the analog crossbar.
+
+        Args:
+            **kwargs: see tile level,
+                e.g. :meth:`~aihwkit.simulator.tiles.analog.AnalogTile.get_weights`.
 
         Returns:
             tuple: weight matrix, bias vector
+
+        Raises:
+            ModuleError: if not of type TileModule.
         """
-        realistic = self.realistic_read_write and not force_exact
-        return self.analog_tile.get_weights(realistic=realistic)
-
-    def _sync_weights_from_tile(self) -> None:
-        """Update the layer weight and bias from the values on the analog tile.
-
-        Update the ``self.weight`` and ``self.bias`` Parameters with an
-        exact copy of the internal analog tile weights.
-        """
-        tile_weight, tile_bias = self.get_weights(force_exact=True)
-        self.weight.data[:] = tile_weight.reshape(self.weight.shape)
-        if self.use_bias:
-            self.bias.data[:] = tile_bias.reshape(self.bias.shape)  # type: ignore
-
-    def _sync_weights_to_tile(self) -> None:
-        """Update the tile values from the layer weights and bias.
-
-        Update the internal tile weights with an exact copy of the values of
-        the ``self.weight`` and ``self.bias`` Parameters.
-        """
-        self.set_weights(self.weight, self.bias, force_exact=True)
+        if hasattr(self, "analog_module"):
+            return self.analog_module.get_weights(**kwargs)
+        raise ModuleError(f"get_weights not implemented for {type(self).__name__} ")
 
     def load_state_dict(
-            self,
-            state_dict: Dict,
-            strict: bool = True
+        self,  # pylint: disable=arguments-differ
+        state_dict: "OrderedDict[str, Tensor]",
+        strict: bool = True,
+        load_rpu_config: Optional[bool] = None,
+        strict_rpu_config_check: Optional[bool] = None,
     ) -> NamedTuple:
-        """Copy parameters and buffers into this module and descendants."""
-        current_dict = state_dict.copy()
-        analog_state = current_dict.pop('analog_tile_state')
-        self.analog_tile.__setstate__(analog_state)
-        ret = super().load_state_dict(current_dict, strict)
-        self._sync_weights_to_tile()  # not needed actually
-        return ret
+        """Specializes torch's ``load_state_dict`` to add a flag whether to
+        load the RPU config from the saved state.
 
-    def state_dict(
-            self,
-            destination: Any = None,
-            prefix: str = '',
-            keep_vars: bool = False
-    ) -> Dict:
-        """Returns a dictionary containing a whole state of the module."""
-        self._sync_weights_from_tile()
-        # TODO: this will also pickle the resistive device. Problematic?  we
-        # could also just save hidden_pars and weights. However, in any case the
-        # state_dict will not reflect the model.parameters() any more, which
-        # might get tricky. In any case, internal hidden weights need to be
-        # saved to reconstruct a meaningful analog tile
+        Args:
+            state_dict: see torch's ``load_state_dict``
+            strict: see torch's ``load_state_dict``
+            load_rpu_config: Whether to load the saved RPU
+                config or use the current RPU config of the model.
 
-        analog_state = self.analog_tile.__getstate__()
-        current_state = super().state_dict(destination, prefix, keep_vars)
-        current_state['analog_tile_state'] = analog_state
-        return current_state
+                Caution:
 
-    def cuda(
-            self,
-            device: Optional[Union[torch_device, str, int]] = None
-    ) -> 'AnalogModuleBase':
-        """Moves all model parameters, buffers and tiles to the GPU.
+                    If ``load_rpu_config=False`` the RPU config can
+                    be changed from the stored model. However, the user has to
+                    make sure that the changed RPU config makes sense.
 
-        This also makes associated parameters and buffers different objects. So
-        it should be called before constructing optimizer if the module will
-        live on GPU while being optimized.
+                    For instance, changing the device type might
+                    change the expected fields in the hidden
+                    parameters and result in an error.
 
-        Arguments:
-            device (int, optional): if specified, all parameters will be
-                copied to that GPU device
+            strict_rpu_config_check: Whether to check and throw an
+                error if the current ``rpu_config`` is not of the same
+                class type when setting ``load_rpu_config`` to
+                False. In case of ``False`` the user has to make sure
+                that the ``rpu_config`` are compatible.
 
         Returns:
-            Module: self
+            see torch's ``load_state_dict``
+
+        Raises:
+            ModuleError: in case the rpu_config class mismatches
+            or mapping parameter mismatch for
+            ``load_rpu_config=False``.
+
+        """
+        for analog_tile in self.analog_tiles():
+            analog_tile.set_load_rpu_config_state(load_rpu_config, strict_rpu_config_check)
+        return super().load_state_dict(state_dict, strict)  # type: ignore
+
+    def prepare_for_ddp(self) -> None:
+        """Adds ignores to avoid broadcasting the analog tile states in case of
+        distributed training.
+
+        Note:
+            Call this function before the mode is converted with DDP.
+
+        Important:
+            Only InferenceTile supports DDP.
+
+        Raises:
+
+            ModuleError: In case analog tiles with are used that do not
+                support data-parallel model, ie. all RPUCUda training
+                tiles.
+        """
+        # pylint: disable=attribute-defined-outside-init
+        exclude_list = []
+        for module in self.modules():  # type: ignore
+            if isinstance(module, AnalogLayerBase):
+                for analog_tile in module.analog_tiles():
+                    if not analog_tile.supports_ddp:
+                        raise ModuleError(
+                            "DDP is only supported with some tiles (e.g. Torch/InferenceTile)"
+                        )
+                exclude_list += [
+                    AnalogTileStateNames.CONTEXT,
+                    AnalogTileStateNames.ANALOG_STATE_NAME,
+                ]
+        exclude_list = list(set(exclude_list))
+        params = self.state_dict().keys()  # type: ignore
+        exclude_params = []
+        for param in params:
+            for word in exclude_list:
+                if word in param and word not in exclude_params:
+                    exclude_params.append(param)
+                    break
+        self._ddp_params_and_buffers_to_ignore = exclude_params
+
+    def drift_analog_weights(self, t_inference: float = 0.0) -> None:
+        """(Program) and drift the analog weights.
+
+        Args:
+            t_inference: assumed time of inference (in sec).
+
+        Raises:
+            ModuleError: if the layer is not in evaluation mode.
+        """
+        if self.training:  # type: ignore
+            raise ModuleError("drift_analog_weights can only be applied in evaluation mode")
+        for analog_tile in self.analog_tiles():
+            if isinstance(analog_tile, InferenceTileWithPeriphery):
+                analog_tile.drift_weights(t_inference)
+
+    def program_analog_weights(self, noise_model: Optional["BaseNoiseModel"] = None) -> None:
+        """Program the analog weights.
+
+        Args:
+            noise_model: Optional defining the noise model to be
+                used. If not given, it will use the noise model
+                defined in the `RPUConfig`.
+
+                Caution:
+
+                    If given a noise model here it will overwrite the
+                    stored `rpu_config.noise_model` definition in the
+                    tiles.
+
+        Raises:
+            ModuleError: if the layer is not in evaluation mode.
+        """
+        if self.training:  # type: ignore
+            raise ModuleError("program_analog_weights can only be applied in evaluation mode")
+        for analog_tile in self.analog_tiles():
+            analog_tile.program_weights(noise_model=noise_model)
+
+    def extra_repr(self) -> str:
+        """Set the extra representation of the module.
+
+        Returns:
+            A string with the extra representation.
+        """
+        output = super().extra_repr()  # type: ignore
+        if len(output) == 0:
+            # likely Sequential. Keep also silent
+            return output
+        if not hasattr(self, "_extra_repr_save"):
+            # pylint: disable=attribute-defined-outside-init
+            self._extra_repr_save = next(self.analog_tiles()).rpu_config.__class__.__name__
+        output += ", " + self._extra_repr_save
+        return output.rstrip()
+
+    def remap_analog_weights(self, weight_scaling_omega: Optional[float] = 1.0) -> None:
+        """Gets and re-sets the weights in case of using the weight scaling.
+
+        This re-sets the weights with applied mapping scales, so that
+        the weight mapping scales are updated.
+
+        In case of hardware-aware training, this would update the
+        weight mapping scales so that the absolute max analog weights
+        are set to 1 (as specified in the ``weight_scaling``
+        configuration of
+        :class:`~aihwkit.parameters.mapping.MappingParameter`).
+
+        Note:
+            By default the weight scaling omega factor is set to 1
+            here (overriding any setting in the ``rpu_config``). This
+            means that the max weight value is set to 1 internally for
+            the analog weights.
+
+        Caution:
+            This should typically *not* be called for analog. Use
+            ``program_weights`` to re-program.
+
+        Args:
+            weight_scaling_omega: The weight scaling omega factor (see
+                :class:`~aihwkit.parameters.mapping.MappingParameter`). If
+                set to None here, it will take the value in the
+                mapping parameters. Default is however 1.0.
+        """
+        for analog_tile in self.analog_tiles():
+            analog_tile.remap_weights(weight_scaling_omega=weight_scaling_omega)
+
+    def replace_rpu_config(self, rpu_config: RPUConfigBase) -> None:
+        """Modifies the RPUConfig for all underlying analog tiles.
+
+        Each tile will be recreated, to apply the RPUConfig changes.
+
+        Note:
+
+            Typically, the RPUConfig class needs to be the same
+            otherwise an error will be raised.
+
+        Caution:
+            If analog tiles have different RPUConfigs, these
+            differences will be overwritten
+
+        Args:
+            rpu_config: New RPUConfig to apply
         """
 
-        return_value = super().cuda(device)
-        return_value.analog_tile = self.analog_tile.cuda(device)
-        # TODO: check why this is not happening on its own
-        return_value.set_weights(return_value.weight, return_value.bias)
-        return return_value
+        for analog_tile in self.analog_tiles():
+            analog_tile.to(rpu_config)

@@ -1,99 +1,63 @@
 Advanced installation guide
 ===========================
 
-Compilation
------------
+Install the aihwkit conda package
+---------------------------------
 
-The build system for ``aihwkit`` is based on `cmake`_, making use of
-scikit-build_ for generating the Python packages.
+At this time, the conda package is only available for the Linux environment. You can use the
+following steps as an example for how to install the aihwkit conda package.
 
-Some of the dependencies and tools are Python-based. For convenience, we
-suggest creating a `virtual environment`_ as a way to isolate your
-environment::
+There is a conda package for aihwkit available in conda-forge. 
+It can be  installed in a conda environment running on a Linux or WSL in a Windows system.  
 
-    $ python3 -m venv aihwkit_env
-    $ cd aihwkit_env
-    $ source bin/activate
-    (aihwkit_env) $
+Install any one of the conda packages as shown below.
 
-.. note::
+  - CPU::
 
-    The following sections assume that the command line examples are executed
-    in the activated ``aihwkit_env`` environment.
+    $ conda install -c conda-forge aihwkit
 
-Dependencies
-~~~~~~~~~~~~
+  - GPU::
 
-For compiling ``aihwkit``, the following dependencies are required:
+    $ conda install -c conda-forge aihwkit-gpu
 
-===============================  ========  ======
-Dependency                       Version   Notes
-===============================  ========  ======
-C++11 compatible compiler
-`cmake`_                         3.18+
-`pybind11`_                      2.5.0+    Installing from ``pip`` is not supported [#f1]_
-`scikit-build`_                  0.11.0+
-`Python 3 development headers`_  3.6+
-BLAS implementation                        `OpenBLAS`_ or `Intel MKL`_
-CUDA                             9.0+      Optional, for GPU-enabled simulator
-`Nvidia CUB`_                    1.8.0     Optional, for GPU-enabled simulator
-`googletest`_                    1.10.0    Optional, for building the C++ tests
-`PyTorch`_                       1.5+      The libtorch library and headers are needed [#f2]_
-===============================  ========  ======
+Install the aihwkit using pip
+---------------------------------
+AIHWKIT can also be installed using pip commands as shown below.
 
-Please refer to your operative system documentation for instructions on how
-to install the different dependencies. On a Debian-based operative system,
-the following commands can be used for installing the minimal
-dependencies::
+ - CPU::
 
-    $ sudo apt-get install python3-pybind11 python3-dev libopenblas-dev
-    $ pip install -r requirements.txt
+    $ pip install aihwkit
 
-On an OSX-based system, the following commands can be used for installing the
-minimal dependencies (note that ``Xcode`` needs to be installed)::
+ - GPU:
 
-    $ brew install pybind11
-    $ brew install openblas
-    $ pip install -r requirements.txt
+  To install the GPU version, select the appropriate combination of Python and CUDA versions:
 
-Installing and compiling
-~~~~~~~~~~~~~~~~~~~~~~~~
+  - For Python 3.9 and CUDA 11.8::
 
-Once the dependencies are in place, the following command can be used for
-installing
-For compiling and installing the Python package, the following command can be
-used::
+    $ wget https://aihwkit-gpu-demo.s3.us-east.cloud-object-storage.appdomain.cloud/aihwkit-0.9.2+cuda118-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl 
+    $ pip install aihwkit-0.9.2+cuda118-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 
-    $ pip install -v aihwkit
+  - For Python 3.9 and CUDA 12.1::
 
-This command will:
+    $ wget https://aihwkit-gpu-demo.s3.us-east.cloud-object-storage.appdomain.cloud/aihwkit-0.9.2+cuda121-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl 
+    $ pip install aihwkit-0.9.2+cuda121-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 
-* download the source tarball for the library.
-* invoke ``scikit-build``
-* which in turn will invoke ``cmake`` for the compilation.
-* execute the commands in verbose mode, for helping troubleshooting issues.
+  - For Python 3.10 and CUDA 11.8::
 
-If there are any issue with the dependencies or the compilation, the output
-of the command will help diagnosing the issue.
+    $ wget https://aihwkit-gpu-demo.s3.us-east.cloud-object-storage.appdomain.cloud/aihwkit-0.9.2+cuda118-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl 
+    $ pip install aihwkit-0.9.2+cuda118-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+
+  - For Python 3.10 and CUDA 12.1::
+
+    $ wget https://aihwkit-gpu-demo.s3.us-east.cloud-object-storage.appdomain.cloud/aihwkit-0.9.2+cuda121-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl 
+    $ pip install aihwkit-0.9.2+cuda121-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 
 .. note::
 
-    Please note that the instruction on this page refer to installing as an
+    Please note that the instructions on this page refer to installing as an
     end user. If you are planning to contribute to the project, an alternative
     setup and tips can be found at the :doc:`developer_install` section that
     is more tuned towards the needs of a development cycle.
-
-.. [#f1] The current (2.5.0) version of ``pybind1`` does not include the
-   necessary ``cmake`` helpers on its ``pip`` release. It is recommended to either
-   install ``pybind11`` using your operative system package manager or compile and
-   install it manually.
-
-.. [#f2] This library uses PyTorch as both a build dependency and a runtime
-   dependency. Please ensure that your torch installation includes ``libtorch``
-   and the development headers - they are included by default if installing
-   torch from ``pip``.
-
-.. _virtual environment: https://docs.python.org/3/library/venv.html
 
 .. _cmake: https://cmake.org/
 .. _Nvidia CUB: https://github.com/NVlabs/cub
@@ -104,3 +68,8 @@ of the command will help diagnosing the issue.
 .. _scikit-build: https://github.com/scikit-build/scikit-build
 .. _googletest: https://github.com/google/googletest
 .. _PyTorch: https://pytorch.org
+.. _OpenMP: https://openmp.llvm.org
+.. _OpenBLAS - Visual Studio: https://github.com/xianyi/OpenBLAS/wiki/How-to-use-OpenBLAS-in-Microsoft-Visual-Studio
+.. _MS Visual Studio 2019: https://visualstudio.microsoft.com/vs/
+.. _Miniconda: https://docs.conda.io/en/latest/miniconda.html
+.. _Cuda: https://developer.nvidia.com/cuda-toolkit

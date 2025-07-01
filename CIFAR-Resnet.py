@@ -19,7 +19,7 @@ from utils.logger import Logger
 
 import sys
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-AIHWKIT_SRC = os.path.join(CURRENT_DIR, 'aihwkit')
+AIHWKIT_SRC = os.path.join(CURRENT_DIR, 'aihwkit', 'src')
 sys.path.insert(0, AIHWKIT_SRC)
 # For warm start
 import aihwkit
