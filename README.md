@@ -77,15 +77,3 @@ python CIFAR-Resnet.py --optimizer="ResL" \
 
 ---
 
-## 📁 Project Structure
-
-```
-.
-├── aihwkit/               # Modified AIHWKit (with C++ backend and bindings)
-├── Mnist_LeNet5.py        # MNIST training script
-├── CIFAR-Resnet.py        # CIFAR training script
-├── load_env.sh            # Environment setup helper
-└── README.md              # Project documentation
-```
-
----
